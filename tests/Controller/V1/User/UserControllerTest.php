@@ -566,6 +566,7 @@ final class UserControllerTest extends DatabaseTestCase
             $passwordHasher,
             $config,
             new PasswordHistoryService($passwordHasher, $config),
+            $this->createTranslator(),
         );
     }
 
