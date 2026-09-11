@@ -27,6 +27,7 @@ use YiiRocks\Voyti\Event\User\UserEvent;
 use YiiRocks\Voyti\Exception\ActionPreventedException;
 use YiiRocks\Voyti\Model\User;
 use YiiRocks\Voyti\Model\UserPasswordHistory;
+use YiiRocks\Voyti\PasswordPolicyConfig;
 use YiiRocks\Voyti\Service\MailService;
 use YiiRocks\Voyti\Service\Password\PasswordGeneratorInterface;
 use YiiRocks\Voyti\Service\Password\PasswordHistoryService;
@@ -71,6 +72,40 @@ final class UserControllerTest extends DatabaseTestCase
         $this->responseFactory = $this->createMock(DataResponseFactoryInterface::class);
         $this->passwordGenerator = $this->createMock(PasswordGeneratorInterface::class);
         $this->passwordGenerator->method('generate')->willReturn('fallback-generated-password');
+    }
+
+    public function testPasswordPolicyErrorsReturnBadRequest(): void
+    {
+        $config = VoytiConfigFactory::create(
+            passwordPolicy: new PasswordPolicyConfig(minUppercase: 1, minDigits: 1),
+        );
+        $response = $this->expectResponse($this->callback(static fn(array $data): bool
+            => $data['error'] === 'Password must contain at least 1 uppercase character.'
+            && count($data['errors']) === 2), 400);
+
+        self::assertSame(
+            $response,
+            $this->createController($config)->create('policy@example.com', 'policy-user', 'lowercase'),
+        );
+        self::assertNull(User::findByEmail('policy@example.com'));
+    }
+
+    public function testPasswordPolicyErrorsOnUpdateReturnBadRequest(): void
+    {
+        $user = $this->createUser('policy-update', 'policy-update@example.com');
+        $passwordHash = $user->getPasswordHash();
+        $config = VoytiConfigFactory::create(
+            passwordPolicy: new PasswordPolicyConfig(minUppercase: 1),
+        );
+        $response = $this->expectResponse($this->callback(static fn(array $data): bool
+            => $data['error'] === 'Password must contain at least 1 uppercase character.'
+            && $data['errors'] === ['Password must contain at least 1 uppercase character.']), 400);
+
+        self::assertSame(
+            $response,
+            $this->createController($config)->update(id: (int) $user->getId(), password: 'lowercase'),
+        );
+        self::assertSame($passwordHash, User::findById((int) $user->getId())?->getPasswordHash());
     }
 
     public static function createProvider(): iterable
@@ -256,8 +291,12 @@ final class UserControllerTest extends DatabaseTestCase
         $controller = new UserController(
             config: $this->config,
             responseFactory: new DataResponseFactory(new Psr17Factory()),
-            passwordGenerator: new RandomPasswordGenerator(),
-            passwordHistoryService: new PasswordHistoryService(TestPasswordHasherFactory::create(), $this->config),
+            passwordGenerator: new RandomPasswordGenerator($this->config),
+            passwordHistoryService: new PasswordHistoryService(
+                TestPasswordHasherFactory::create(),
+                $this->config,
+                $this->createTranslator(),
+            ),
             userCreationHelper: $this->userCreationHelper,
             userUpdateHelper: $this->createUserUpdateHelper($this->config),
             eventDispatcher: $this->eventDispatcher,
@@ -483,7 +522,11 @@ final class UserControllerTest extends DatabaseTestCase
                     config: $test->config,
                     responseFactory: $test->responseFactory,
                     passwordGenerator: $test->passwordGenerator,
-                    passwordHistoryService: new PasswordHistoryService(TestPasswordHasherFactory::create(), $test->config),
+                    passwordHistoryService: new PasswordHistoryService(
+                        TestPasswordHasherFactory::create(),
+                        $test->config,
+                        $test->createTranslator(),
+                    ),
                     userCreationHelper: $test->userCreationHelper,
                     userUpdateHelper: $test->createUserUpdateHelper($test->config, $dispatcher),
                     eventDispatcher: $test->eventDispatcher,
@@ -504,7 +547,7 @@ final class UserControllerTest extends DatabaseTestCase
                 $passwordHasher = TestPasswordHasherFactory::create();
                 $user->setPasswordHash($passwordHasher->hash('originalpass'));
                 $user->save();
-                (new PasswordHistoryService($passwordHasher, $config))->record($user);
+                (new PasswordHistoryService($passwordHasher, $config, $test->createTranslator()))->record($user);
                 $response = $test->expectResponse(['error' => 'This password has been used recently. Please choose a different one.'], 400);
                 $result = $test->createController($config)->update(password: 'originalpass', id: $userId);
                 $test->assertSame($response, $result);
@@ -549,7 +592,11 @@ final class UserControllerTest extends DatabaseTestCase
             config: $config,
             responseFactory: $this->responseFactory,
             passwordGenerator: $this->passwordGenerator,
-            passwordHistoryService: new PasswordHistoryService(TestPasswordHasherFactory::create(), $config),
+            passwordHistoryService: new PasswordHistoryService(
+                TestPasswordHasherFactory::create(),
+                $config,
+                $this->createTranslator(),
+            ),
             userCreationHelper: $config === $this->config ? $this->userCreationHelper : $this->createUserCreationHelper($config),
             userUpdateHelper: $this->createUserUpdateHelper($config),
             eventDispatcher: $this->eventDispatcher,
@@ -565,7 +612,7 @@ final class UserControllerTest extends DatabaseTestCase
             new EventCaptureDispatcher(),
             $passwordHasher,
             $config,
-            new PasswordHistoryService($passwordHasher, $config),
+            new PasswordHistoryService($passwordHasher, $config, $this->createTranslator()),
             $this->createTranslator(),
         );
     }
@@ -575,7 +622,7 @@ final class UserControllerTest extends DatabaseTestCase
         return new UserUpdateHelper(
             new SystemClock(),
             $dispatcher ?? $this->eventDispatcher,
-            new PasswordHistoryService(TestPasswordHasherFactory::create(), $config),
+            new PasswordHistoryService(TestPasswordHasherFactory::create(), $config, $this->createTranslator()),
         );
     }
 

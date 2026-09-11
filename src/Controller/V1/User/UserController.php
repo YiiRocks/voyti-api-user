@@ -10,6 +10,7 @@ use RuntimeException;
 use YiiRocks\Voyti\Api\Middleware\ApiTokenAuthenticationMiddleware;
 use YiiRocks\Voyti\Event\User\UserEvent;
 use YiiRocks\Voyti\Exception\ActionPreventedException;
+use YiiRocks\Voyti\Exception\PasswordPolicyViolationException;
 use YiiRocks\Voyti\Model\User;
 use YiiRocks\Voyti\Service\Password\PasswordGeneratorInterface;
 use YiiRocks\Voyti\Service\Password\PasswordHistoryService;
@@ -55,9 +56,14 @@ final readonly class UserController
 
         // Users provisioned through this admin-only API are confirmed immediately; they bypass the
         // email confirmation flow that self-registration goes through.
-        $user = $this->userCreationHelper->buildUser($email, $username, $password);
         try {
+            $user = $this->userCreationHelper->buildUser($email, $username, $password);
             $this->userCreationHelper->persistAndNotifySkippingConfirmation($user);
+        } catch (PasswordPolicyViolationException $exception) {
+            return $this->responseFactory->createResponse(
+                ['error' => $exception->getMessage(), 'errors' => $exception->getErrors()],
+                Status::BAD_REQUEST,
+            );
         } catch (RuntimeException $exception) {
             return $this->responseFactory->createResponse(
                 ['error' => $exception->getMessage()],
@@ -172,6 +178,11 @@ final readonly class UserController
                     }
                 },
                 $password,
+            );
+        } catch (PasswordPolicyViolationException $exception) {
+            return $this->responseFactory->createResponse(
+                ['error' => $exception->getMessage(), 'errors' => $exception->getErrors()],
+                Status::BAD_REQUEST,
             );
         } catch (ActionPreventedException $exception) {
             return $this->responseFactory->createResponse(
