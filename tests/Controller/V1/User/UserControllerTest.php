@@ -80,7 +80,7 @@ final class UserControllerTest extends DatabaseTestCase
             passwordPolicy: new PasswordPolicyConfig(minUppercase: 1, minDigits: 1),
         );
         $response = $this->expectResponse($this->callback(static fn(array $data): bool
-            => $data['error'] === 'Password must contain at least 1 uppercase characters.'
+            => $data['error'] === 'Password must contain at least 1 uppercase character.'
             && count($data['errors']) === 2), 400);
 
         self::assertSame(
@@ -98,8 +98,8 @@ final class UserControllerTest extends DatabaseTestCase
             passwordPolicy: new PasswordPolicyConfig(minUppercase: 1),
         );
         $response = $this->expectResponse($this->callback(static fn(array $data): bool
-            => $data['error'] === 'Password must contain at least 1 uppercase characters.'
-            && $data['errors'] === ['Password must contain at least 1 uppercase characters.']), 400);
+            => $data['error'] === 'Password must contain at least 1 uppercase character.'
+            && $data['errors'] === ['Password must contain at least 1 uppercase character.']), 400);
 
         self::assertSame(
             $response,
