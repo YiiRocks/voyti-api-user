@@ -14,7 +14,7 @@ use Yiisoft\Db\Sqlite\Driver as SqliteDriver;
 use Yiisoft\Db\Sqlite\Dsn;
 use Yiisoft\Translator\CategorySource;
 use Yiisoft\Translator\Message\Php\MessageSource;
-use Yiisoft\Translator\SimpleMessageFormatter;
+use Yiisoft\Translator\IntlMessageFormatter;
 use Yiisoft\Translator\Translator;
 use Yiisoft\Translator\TranslatorInterface;
 
@@ -39,7 +39,7 @@ abstract class TestCase extends BaseTestCase
             new CategorySource(
                 'voyti',
                 new MessageSource(InstalledVersions::getInstallPath('yiirocks/voyti') . '/resources/messages'),
-                new SimpleMessageFormatter(),
+                new IntlMessageFormatter(),
             ),
         );
         return $translator;
